@@ -22,6 +22,7 @@ class TriMipRF(nn.Module):
         net_depth_color: int = 4,
         net_width: int = 128,
         density_activation: Callable = lambda x: trunc_exp(x - 1),
+        SH_degree: int = 4,
     ) -> None:
         super().__init__()
         self.plane_size = plane_size
@@ -30,13 +31,19 @@ class TriMipRF(nn.Module):
         self.density_activation = density_activation
 
         self.encoding = TriMipEncoding(n_levels, plane_size, feature_dim)
-        self.direction_encoding = tcnn.Encoding(
-            n_input_dims=3,
-            encoding_config={
-                "otype": "SphericalHarmonics",
-                "degree": 4,
-            },
-        )
+        self.SH_degree = SH_degree
+        if SH_degree > 0:
+            self.direction_encoding = tcnn.Encoding(
+                n_input_dims=3,
+                encoding_config={
+                    "otype": "SphericalHarmonics",
+                    "degree": SH_degree,
+                },
+            )
+            direction_encoding_dim = self.direction_encoding.n_output_dims
+        else:
+            self.direction_encoding = None
+            direction_encoding_dim = 0
         self.mlp_base = tcnn.Network(
             n_input_dims=self.encoding.dim_out,
             n_output_dims=geo_feat_dim + 1,
@@ -49,7 +56,7 @@ class TriMipRF(nn.Module):
             },
         )
         self.mlp_head = tcnn.Network(
-            n_input_dims=self.direction_encoding.n_output_dims + geo_feat_dim,
+            n_input_dims=direction_encoding_dim + geo_feat_dim,
             n_output_dims=3,
             network_config={
                 "otype": "FullyFusedMLP",
@@ -90,9 +97,12 @@ class TriMipRF(nn.Module):
 
     def query_rgb(self, dir, embedding):
         # dir in [-1,1]
-        dir = (dir + 1.0) / 2.0  # SH encoding must be in the range [0, 1]
-        d = self.direction_encoding(dir.view(-1, dir.shape[-1]))
-        h = torch.cat([d, embedding.view(-1, self.geo_feat_dim)], dim=-1)
+        if self.SH_degree > 0:
+            dir = (dir + 1.0) / 2.0  # SH encoding must be in the range [0, 1]
+            d = self.direction_encoding(dir.view(-1, dir.shape[-1]))
+            h = torch.cat([d, embedding.view(-1, self.geo_feat_dim)], dim=-1)
+        else:
+            h = embedding.view(-1, self.geo_feat_dim)
         rgb = (
             self.mlp_head(h)
             .view(list(embedding.shape[:-1]) + [3])

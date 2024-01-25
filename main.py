@@ -15,6 +15,7 @@ def main(
     seed: int = 42,
     num_workers: int = 0,
     train_split: str = "train",
+    test_split: str = "test",
     stages: str = "train_eval",
     batch_size: int = 16,
     model_name="Tri-MipRF",
@@ -30,18 +31,19 @@ def main(
         num_workers=num_workers,
         shuffle=False,
         collate_fn=ray_collate,
-        pin_memory=True,
+        pin_memory=False,
         worker_init_fn=None,
         pin_memory_device='cuda',
         prefetch_factor=2,
     )
-    test_dataset = RayDataset(split='test')
+
+    test_dataset = RayDataset(split=test_split)
     test_loader = DataLoader(
         test_dataset,
         batch_size=None,
-        num_workers=1,
+        num_workers=0,
         shuffle=False,
-        pin_memory=True,
+        pin_memory=False,
         worker_init_fn=None,
         pin_memory_device='cuda',
     )

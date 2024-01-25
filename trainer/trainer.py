@@ -13,7 +13,9 @@ from neural_field.model.RFModel import RFModel
 from utils.writer import TensorboardWriter
 from utils.colormaps import apply_depth_colormap
 import dataset.utils.io as data_io
-
+from tqdm import tqdm
+import json
+import os
 
 @gin.configurable()
 class Trainer:
@@ -109,7 +111,7 @@ class Trainer:
         iter_eval_loader = iter(self.eval_loader)
         eval_0 = next(iter_eval_loader)
         self.model.train()
-        for step in range(self.max_steps):
+        for step in tqdm(range(self.max_steps)):
             self.model.before_iter(step)
             metrics = self.train_iter(
                 step,
@@ -135,7 +137,7 @@ class Trainer:
 
             self.model.after_iter(step)
 
-            if step > 0 and step % self.eval_step == 0:
+            if step>0 and step % self.eval_step == 0:
                 self.model.eval()
                 metrics, final_rb, target = self.eval_img(
                     next(iter_eval_loader) if self.varied_eval_img else eval_0,
@@ -191,7 +193,7 @@ class Trainer:
             results.update({k: [] for k in rendering_channels})
 
         self.model.eval()
-        metrics = []
+        metrics, names = [], []
         for idx, data in enumerate(tqdm(self.eval_loader)):
             metric, rb, target = self.eval_img(data)
             metrics.append(metric)
@@ -199,11 +201,17 @@ class Trainer:
                 results["names"].append(data['name'])
                 for channel in rendering_channels:
                     if hasattr(rb, channel):
-                        values = getattr(rb, channel).cpu().numpy()
                         if 'depth' == channel:
+                            '''
                             values = (values * 10000.0).astype(
                                 np.uint16
                             )  # scale the depth by 10k, and save it as uint16 png images
+                            '''
+                            values = getattr(rb, channel).cpu()
+                            values = apply_depth_colormap(values)
+                            values = (values*255).numpy().astype(np.uint8)
+                        else:
+                            values = getattr(rb, channel).cpu().numpy()
                         results[channel].append(values)
                     else:
                         raise NotImplementedError
@@ -216,6 +224,12 @@ class Trainer:
                     data_io.write_rendering(data, channel_path, name)
 
         metrics = {k: [dct[k] for dct in metrics] for k in metrics[0]}
+        with open(os.path.join(res_dir, 'metrics_average.json'),'w') as f:
+            json.dump({k:sum(v)/len(v) for k,v in metrics.items()}, f)
+        metrics_per_img = {n:m  for n,m in zip(results["names"], metrics)}
+        with open(os.path.join(res_dir, 'metrics_per_img.json'), 'w') as f:
+            json.dump(metrics_per_img, f)
+            
         logger.info("==> Evaluation done")
         for k, v in metrics.items():
             metrics[k] = sum(v) / len(v)

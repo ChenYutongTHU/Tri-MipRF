@@ -1,0 +1,26 @@
+main.train_split = 'train_single-scale'
+main.test_split = 'test_single-scale'
+main.num_workers = 0 # avoid OO-RAM
+main.model_name = 'Tri-MipRF'
+main.batch_size = 1  #1/2
+# this is not the actual batch_size, but the prefetch size
+
+RayDataset.base_path = '/home/yutongchen/3D_projects/data/BlenderNeRF/'
+RayDataset.scene = '1st_scene_v2_rgba'
+RayDataset.scene_type = 'judy_blender'
+RayDataset.num_rays = 16384 
+# number of rays sampled for each image (maximum)
+RayDataset.render_bkgd = 'randn' #during testing, it will be black
+
+Trainer.base_exp_dir = 'output/1st_scene_v2_rgba'
+Trainer.exp_name = None
+Trainer.eval_step = 5000
+Trainer.log_step = 200
+Trainer.max_steps = 25001
+Trainer.target_sample_batch_size = 262144 #dynamic batching
+Trainer.num_rays = 1024 
+#To start, for Blender, it cannot be too large, otherwise OOM
+
+TriMipRF.SH_degree = 0 #Turn off view-depedent lighting effects
+
+

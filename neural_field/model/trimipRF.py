@@ -80,8 +80,14 @@ class TriMipRFModel(RFModel):
                 level_vol = torch.log2(
                     sample_ball_radii / self.feature_vol_radii
                 )  # real level should + log2(feature_resolution)
-                return self.field.query_density(positions, level_vol)['density']
-
+                # import ipdb; ipdb.set_trace()
+                #print(t_starts.shape, t_ends.shape)
+                density = self.field.query_density(
+                    positions, level_vol)['density']
+                # import ipdb
+                # ipdb.set_trace()
+                return density
+            #print('Before ray marching', rays.origins.shape, rays.directions.shape, rays.ray_cos.shape)
             ray_indices, t_starts, t_ends = nerfacc.ray_marching(
                 rays.origins,
                 rays.directions,
@@ -91,6 +97,8 @@ class TriMipRFModel(RFModel):
                 render_step_size=self.render_step_size,
                 stratified=self.training,
                 early_stop_eps=1e-4,
+                # t_min=torch.ones((rays.origins.shape[0]),).cuda()*15,
+                # t_max=torch.ones((rays.origins.shape[0]),).cuda()*25,
             )
 
         # Ray rendering
@@ -197,9 +205,10 @@ class TriMipRFModel(RFModel):
                 lr=lr * feature_lr_scale,
             )
         )
-        params_list.append(
-            dict(params=self.field.direction_encoding.parameters(), lr=lr)
-        )
+        if self.field.direction_encoding is not None:
+            params_list.append(
+                dict(params=self.field.direction_encoding.parameters(), lr=lr)
+            )
         params_list.append(dict(params=self.field.mlp_base.parameters(), lr=lr))
         params_list.append(dict(params=self.field.mlp_head.parameters(), lr=lr))
 
